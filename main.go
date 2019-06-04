@@ -57,16 +57,38 @@ func OnData() interface{} {
 	case "switch":
 		data := []byte(res.Data.(string))
 		var button devices.Switch
-		err = json.Unmarshal(data, &button)
+		err := json.Unmarshal(data, &button)
 		if err != nil {
 			log.Println(err)
 		}
-		if button.Status == "click" {
-
+		return &button
+	case "weather.v1":
+		data := []byte(res.Data.(string))
+		var weather devices.WeatherV1
+		err := json.Unmarshal(data, &weather)
+		if err != nil {
+			log.Println(err)
 		}
+		return &weather
+	case "motion":
+		data := []byte(res.Data.(string))
+		var motion devices.Motion
+		err := json.Unmarshal(data, &motion)
+		if err != nil {
+			log.Println(err)
+		}
+		return &motion
+	case "sensor_motion.aq2":
+		data := []byte(res.Data.(string))
+		var motion devices.SensorMotionAQ2
+		err := json.Unmarshal(data, &motion)
+		if err != nil {
+			log.Println(err)
+		}
+		return &motion
+	default:
+		return nil
 	}
-
-	return res
 }
 
 // OnStop close connection
