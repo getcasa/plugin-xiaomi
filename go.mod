@@ -1,4 +1,4 @@
-module github.com/ItsJimi/casa-xiaomi
+module github.com/getcasa/plugin-xiaomi
 
 go 1.12
 
