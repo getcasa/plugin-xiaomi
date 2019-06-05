@@ -7,6 +7,7 @@ import (
 	"net"
 
 	"github.com/ItsJimi/casa-xiaomi/devices"
+	"github.com/getcasa/sdk"
 )
 
 func main() {}
@@ -15,6 +16,30 @@ const (
 	ip   = "224.0.0.50"
 	port = "9898"
 )
+
+var Config = sdk.Configuration{
+	Name:        "xiaomi",
+	Version:     "1.0.0",
+	Author:      "ItsJimi",
+	Description: "xiaomi",
+	Main:        "xiaomi",
+	FuncData:    "onData",
+	Triggers: []sdk.Trigger{
+		sdk.Trigger{
+			Name: "click",
+		},
+		sdk.Trigger{
+			Name: "double_click",
+		},
+		sdk.Trigger{
+			Name: "long_click_press",
+		},
+		sdk.Trigger{
+			Name: "long_click_release",
+		},
+	},
+	Actions: []sdk.Action{},
+}
 
 var conn *net.UDPConn
 
@@ -58,6 +83,7 @@ func OnData() interface{} {
 		data := []byte(res.Data.(string))
 		var button devices.Switch
 		err := json.Unmarshal(data, &button)
+		button.SID = res.SID
 		if err != nil {
 			log.Println(err)
 		}
@@ -66,6 +92,7 @@ func OnData() interface{} {
 		data := []byte(res.Data.(string))
 		var weather devices.WeatherV1
 		err := json.Unmarshal(data, &weather)
+		weather.SID = res.SID
 		if err != nil {
 			log.Println(err)
 		}
@@ -74,6 +101,7 @@ func OnData() interface{} {
 		data := []byte(res.Data.(string))
 		var motion devices.Motion
 		err := json.Unmarshal(data, &motion)
+		motion.SID = res.SID
 		if err != nil {
 			log.Println(err)
 		}
@@ -82,11 +110,31 @@ func OnData() interface{} {
 		data := []byte(res.Data.(string))
 		var motion devices.SensorMotionAQ2
 		err := json.Unmarshal(data, &motion)
+		motion.SID = res.SID
 		if err != nil {
 			log.Println(err)
 		}
 		return &motion
+	// case "gateway":
+	// 	data := []byte(res.Data.(string))
+	// 	var gateway devices.Gateway
+	// 	err := json.Unmarshal(data, &gateway)
+	// 	gateway.SID = res.SID
+	// 	if err != nil {
+	// 		log.Println(err)
+	// 	}
+	// 	return &gateway
+	case "sensor_cube.aqgl01":
+		data := []byte(res.Data.(string))
+		var sensor devices.SensorCubeAqgl01
+		err := json.Unmarshal(data, &sensor)
+		sensor.SID = res.SID
+		if err != nil {
+			log.Println(err)
+		}
+		return &sensor
 	default:
+		// fmt.Println(res)
 		return nil
 	}
 }
