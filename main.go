@@ -6,7 +6,7 @@ import (
 	"log"
 	"net"
 
-	"github.com/ItsJimi/casa-xiaomi/devices"
+	"github.com/getcasa/plugin-xiaomi/devices"
 	"github.com/getcasa/sdk"
 )
 
