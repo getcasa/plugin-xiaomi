@@ -26,16 +26,20 @@ var Config = sdk.Configuration{
 	FuncData:    "onData",
 	Triggers: []sdk.Trigger{
 		sdk.Trigger{
-			Name: "click",
+			Name:          "switch",
+			Field:         "Status",
+			Type:          "string",
+			Possibilities: []string{"click", "double_click", "long_click_press", "long_click_release"},
 		},
 		sdk.Trigger{
-			Name: "double_click",
+			Name:  "temperature",
+			Field: "Temperature",
+			Type:  "int",
 		},
 		sdk.Trigger{
-			Name: "long_click_press",
-		},
-		sdk.Trigger{
-			Name: "long_click_release",
+			Name:  "humidity",
+			Field: "Humidity",
+			Type:  "int",
 		},
 	},
 	Actions: []sdk.Action{},
