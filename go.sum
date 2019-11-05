@@ -2,3 +2,6 @@ github.com/getcasa/sdk v0.0.0-20190603134752-4b316878fca0 h1:4G8Ok0YhMKXG8gECIBD
 github.com/getcasa/sdk v0.0.0-20190603134752-4b316878fca0/go.mod h1:mjoGAmjNYGGUiTi3/4sEY5+MnOLcnaGV4evYJ6+5o4g=
 github.com/getcasa/sdk v0.0.0-20190923145410-20bbee062dc8 h1:Ssm7BqTzzvdj0ZsvZ2bP8Jpq5JsyzJ6cDW8ytGZtyEE=
 github.com/getcasa/sdk v0.0.0-20190923145410-20bbee062dc8/go.mod h1:mjoGAmjNYGGUiTi3/4sEY5+MnOLcnaGV4evYJ6+5o4g=
+github.com/getcasa/sdk v0.0.0-20191105095754-6df142bc28a9 h1:l236hjCXqbA6Y3tHFw7IH3xpSsESYW505mUP0tcR4Lo=
+github.com/getcasa/sdk v0.0.0-20191105095754-6df142bc28a9/go.mod h1:mjoGAmjNYGGUiTi3/4sEY5+MnOLcnaGV4evYJ6+5o4g=
+github.com/mattn/go-sqlite3 v1.10.0/go.mod h1:FPy6KqzDD04eiIsT53CuJW3U88zkxoIYsOqkbpncsNc=
