@@ -123,8 +123,13 @@ var Config = sdk.Configuration{
 
 var conn *net.UDPConn
 
+// Init config and store it to Casa server
+func Init() []byte {
+	return []byte("")
+}
+
 // OnStart start UDP server to get Xiaomi data
-func OnStart() {
+func OnStart(config []byte) {
 	addr, err := net.ResolveUDPAddr("udp", ip+":"+port)
 	if err != nil {
 		log.Panic(err)
