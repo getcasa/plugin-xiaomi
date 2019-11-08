@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"strconv"
+	"reflect"
+	"strings"
+	"time"
 
 	"github.com/getcasa/plugin-xiaomi/devices"
 	"github.com/getcasa/sdk"
@@ -23,14 +25,10 @@ var Config = sdk.Configuration{
 	Name:        "xiaomi",
 	Version:     "1.0.0",
 	Author:      "ItsJimi",
-	Description: "xiaomi",
-	Main:        "xiaomi",
-	FuncData:    "onData",
-	Discover:    true,
+	Description: "Control xiaomi ecosystem",
 	Triggers: []sdk.Trigger{
 		sdk.Trigger{
-			Name:    "switch",
-			FieldID: "SID",
+			Name: "switch",
 			Fields: []sdk.Field{
 				sdk.Field{
 					Name:          "Status",
@@ -41,8 +39,22 @@ var Config = sdk.Configuration{
 			},
 		},
 		sdk.Trigger{
-			Name:    "weatherv1",
-			FieldID: "SID",
+			Name: "sensorht",
+			Fields: []sdk.Field{
+				sdk.Field{
+					Name:   "Temperature",
+					Direct: false,
+					Type:   "int",
+				},
+				sdk.Field{
+					Name:   "Humidity",
+					Direct: false,
+					Type:   "int",
+				},
+			},
+		},
+		sdk.Trigger{
+			Name: "weatherv1",
 			Fields: []sdk.Field{
 				sdk.Field{
 					Name:   "Temperature",
@@ -62,8 +74,7 @@ var Config = sdk.Configuration{
 			},
 		},
 		sdk.Trigger{
-			Name:    "motion",
-			FieldID: "SID",
+			Name: "motion",
 			Fields: []sdk.Field{
 				sdk.Field{
 					Name:          "Status",
@@ -79,8 +90,18 @@ var Config = sdk.Configuration{
 			},
 		},
 		sdk.Trigger{
-			Name:    "sensormotionaq2",
-			FieldID: "SID",
+			Name: "sensormagnetaq2",
+			Fields: []sdk.Field{
+				sdk.Field{
+					Name:          "Status",
+					Direct:        true,
+					Type:          "string",
+					Possibilities: []string{"open", "close"},
+				},
+			},
+		},
+		sdk.Trigger{
+			Name: "sensormotionaq2",
 			Fields: []sdk.Field{
 				sdk.Field{
 					Name:          "Status",
@@ -101,8 +122,7 @@ var Config = sdk.Configuration{
 			},
 		},
 		sdk.Trigger{
-			Name:    "sensorcubeaqgl01",
-			FieldID: "SID",
+			Name: "sensorcubeaqgl01",
 			Fields: []sdk.Field{
 				sdk.Field{
 					Name:          "Status",
@@ -117,20 +137,43 @@ var Config = sdk.Configuration{
 				},
 			},
 		},
+		sdk.Trigger{
+			Name:   "vibration",
+			Fields: []sdk.Field{},
+		},
 	},
 	Actions: []sdk.Action{},
 }
 
 var conn *net.UDPConn
+var gateways []devices.Gateway
+var devs []sdk.Device
+var addr *net.UDPAddr
 
-// Init config and store it to Casa server
-func Init() []byte {
-	return []byte("")
+type xiaomi struct {
+	SID            string   `json:"sid"`
+	Status         string   `json:"status"`
+	IP             string   `json:"ip"`
+	Token          string   `json:"token"`
+	Devices        []string `json:"data"`
+	RGB            int      `json:"rgb"`
+	Illumination   int      `json:"illumination"`
+	Rotate         string   `json:"rotate"`
+	NoMotion       string   `json:"no_motion"`
+	Lux            string   `json:"lux"`
+	Voltage        int      `json:"voltage"`
+	BedActivity    string   `json:"bed_activity"`
+	Coordination   string   `json:"coordination"`
+	FinalTiltAngle string   `json:"final_tilt_angle"`
+	Temperature    string   `json:"temperature"`
+	Humidity       string   `json:"humidity"`
+	Pressure       string   `json:"pressure"`
 }
 
 // OnStart start UDP server to get Xiaomi data
 func OnStart(config []byte) {
-	addr, err := net.ResolveUDPAddr("udp", ip+":"+port)
+	var err error
+	addr, err = net.ResolveUDPAddr("udp", ip+":"+port)
 	if err != nil {
 		log.Panic(err)
 	}
@@ -142,17 +185,25 @@ func OnStart(config []byte) {
 	fmt.Printf("Listening gateway events\n")
 }
 
+// Discover return array of all found devices
+func Discover() []sdk.Device {
+	return devs
+}
+
 // OnData get data from xiaomi gateway
-func OnData() interface{} {
+func OnData() []sdk.Data {
+	var datas []sdk.Data
 	if conn == nil {
 		log.Panic("No connection")
 	}
 
 	buf := make([]byte, 1024)
 	var res Event
+	var err error
+	var n int
 
 	for res.SID == "" {
-		n, _, err := conn.ReadFromUDP(buf)
+		n, _, err = conn.ReadFromUDP(buf)
 		if err != nil {
 			log.Panic("Can't read udp", err)
 		}
@@ -163,76 +214,107 @@ func OnData() interface{} {
 		}
 	}
 
-	switch res.Model {
-	case "switch":
-		data := []byte(res.Data.(string))
-		var button devices.Switch
-		err := json.Unmarshal(data, &button)
-		button.SID = res.SID
+	var newData sdk.Data
+	physicalName := strings.Replace(strings.Replace(strings.ToLower(res.Model), ".", "", -1), "_", "", -1)
+
+	switch res.CMD {
+	case "get_id_list_ack":
+		var datas []string
+
+		if findGatewayFromSID(res.SID) != nil {
+			break
+		}
+		err := json.Unmarshal([]byte(res.Data.(string)), &datas)
 		if err != nil {
-			log.Println(err)
+			fmt.Println(err)
 		}
-		return &button
-	case "weather.v1":
-		data := []byte(res.Data.(string))
-		var weather devices.WeatherV1
-		err := json.Unmarshal(data, &weather)
-		if weather.Temperature != "" {
-			nbr, _ := strconv.ParseFloat(weather.Temperature, 32)
-			weather.Temperature = fmt.Sprintf("%f", nbr/100)
+		gateways = append(gateways, devices.Gateway{
+			SID:     res.SID,
+			Token:   res.Token,
+			Devices: datas,
+		})
+
+		go func() {
+			for _, data := range datas {
+				for findDeviceFromSID(data) == nil {
+					_, err = conn.WriteToUDP([]byte(`{"cmd": "read", "sid": "`+data+`"}`), addr)
+					if err != nil {
+						log.Println(err)
+					}
+					time.Sleep(500 * time.Millisecond)
+				}
+			}
+		}()
+	case "read_ack":
+		if res.Model == "" {
+			break
 		}
-		if weather.Humidity != "" {
-			nbr, _ := strconv.ParseFloat(weather.Humidity, 32)
-			weather.Humidity = fmt.Sprintf("%f", nbr/100)
-		}
-		weather.SID = res.SID
-		if err != nil {
-			log.Println(err)
-		}
-		return &weather
-	case "motion":
-		data := []byte(res.Data.(string))
-		var motion devices.Motion
-		err := json.Unmarshal(data, &motion)
-		motion.SID = res.SID
-		if err != nil {
-			log.Println(err)
-		}
-		return &motion
-	case "sensor_motion.aq2":
-		data := []byte(res.Data.(string))
-		var motion devices.SensorMotionAQ2
-		err := json.Unmarshal(data, &motion)
-		motion.SID = res.SID
-		if err != nil {
-			log.Println(err)
-		}
-		return &motion
-	// case "gateway":
-	// 	data := []byte(res.Data.(string))
-	// 	var gateway devices.Gateway
-	// 	err := json.Unmarshal(data, &gateway)
-	// 	gateway.SID = res.SID
-	// 	if err != nil {
-	// 		log.Println(err)
-	// 	}
-	// 	return &gateway
-	case "sensor_cube.aqgl01":
-		data := []byte(res.Data.(string))
-		var sensor devices.SensorCubeAqgl01
-		err := json.Unmarshal(data, &sensor)
-		sensor.SID = res.SID
-		if err != nil {
-			log.Println(err)
-		}
-		return &sensor
-	default:
-		// fmt.Println(res)
-		return nil
+		devs = append(devs, sdk.Device{
+			Name:         "",
+			PhysicalID:   res.SID,
+			PhysicalName: physicalName,
+			Plugin:       Config.Name,
+		})
 	}
+
+	if res.Model == "gateway" && findGatewayFromSID(res.SID) == nil {
+		conn.WriteToUDP([]byte(`{"cmd": "get_id_list", "sid": "`+res.SID+`"}`), addr)
+		if err != nil {
+			log.Println(err)
+		}
+	}
+
+	if res.Model != "" && sdk.FindTriggerFromName(Config.Triggers, physicalName).Name != "" {
+		data := []byte(res.Data.(string))
+		device := new(xiaomi)
+		err := json.Unmarshal(data, &device)
+		if err != nil {
+			log.Println(err)
+		}
+
+		newData = sdk.Data{
+			Plugin:       Config.Name,
+			PhysicalName: physicalName,
+			PhysicalID:   res.SID,
+		}
+		for _, field := range sdk.FindTriggerFromName(Config.Triggers, physicalName).Fields {
+			newData.Values = append(newData.Values, sdk.Value{
+				Name:  field.Name,
+				Value: []byte(reflect.ValueOf(device).Elem().FieldByName(field.Name).String()),
+				Type:  field.Type,
+			})
+		}
+		datas = append(datas, newData)
+	}
+
+	return datas
 }
 
 // OnStop close connection
 func OnStop() {
 	conn.Close()
+}
+
+func findGatewayFromSID(sid string) *devices.Gateway {
+	if len(gateways) == 0 {
+		return nil
+	}
+	for _, gateway := range gateways {
+		if gateway.SID == sid {
+			return &gateway
+		}
+	}
+	return nil
+}
+
+func findDeviceFromSID(sid string) *sdk.Device {
+	if len(devs) == 0 {
+		return nil
+	}
+	for _, dev := range devs {
+		if dev.PhysicalID == sid {
+			return &dev
+		}
+	}
+	return nil
 }
