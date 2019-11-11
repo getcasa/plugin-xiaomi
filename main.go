@@ -245,6 +245,7 @@ func OnData() []sdk.Data {
 				}
 			}
 		}()
+		return nil
 	case "read_ack":
 		if res.Model == "" {
 			break
@@ -255,6 +256,7 @@ func OnData() []sdk.Data {
 			PhysicalName: physicalName,
 			Plugin:       Config.Name,
 		})
+		return nil
 	}
 
 	if res.Model == "gateway" && findGatewayFromSID(res.SID) == nil {
@@ -262,6 +264,7 @@ func OnData() []sdk.Data {
 		if err != nil {
 			log.Println(err)
 		}
+		return nil
 	}
 
 	if res.Model != "" && sdk.FindTriggerFromName(Config.Triggers, physicalName).Name != "" {
@@ -285,9 +288,10 @@ func OnData() []sdk.Data {
 			})
 		}
 		datas = append(datas, newData)
+		return datas
 	}
 
-	return datas
+	return nil
 }
 
 // OnStop close connection
