@@ -26,73 +26,86 @@ var Config = sdk.Configuration{
 	Version:     "1.0.0",
 	Author:      "ItsJimi",
 	Description: "Control xiaomi ecosystem",
-	Triggers: []sdk.Trigger{
-		sdk.Trigger{
-			Name: "switch",
-			Fields: []sdk.Field{
-				sdk.Field{
+	Devices: []sdk.Device{
+		sdk.Device{
+			Name:           "switch",
+			DefaultTrigger: "",
+			DefaultAction:  "",
+			Triggers: []sdk.Trigger{
+				sdk.Trigger{
 					Name:          "Status",
 					Direct:        true,
 					Type:          "string",
 					Possibilities: []string{"click", "double_click", "long_click_press", "long_click_release"},
 				},
 			},
+			Actions: []string{},
 		},
-		sdk.Trigger{
-			Name: "sensorht",
-			Fields: []sdk.Field{
-				sdk.Field{
+		sdk.Device{
+			Name:           "sensorht",
+			DefaultTrigger: "",
+			DefaultAction:  "",
+			Triggers: []sdk.Trigger{
+				sdk.Trigger{
 					Name:   "Temperature",
 					Direct: false,
 					Type:   "int",
 				},
-				sdk.Field{
+				sdk.Trigger{
 					Name:   "Humidity",
 					Direct: false,
 					Type:   "int",
 				},
 			},
+			Actions: []string{},
 		},
-		sdk.Trigger{
-			Name: "weatherv1",
-			Fields: []sdk.Field{
-				sdk.Field{
+		sdk.Device{
+			Name:           "weatherv1",
+			DefaultTrigger: "",
+			DefaultAction:  "",
+			Triggers: []sdk.Trigger{
+				sdk.Trigger{
 					Name:   "Temperature",
 					Direct: false,
 					Type:   "int",
 				},
-				sdk.Field{
+				sdk.Trigger{
 					Name:   "Humidity",
 					Direct: false,
 					Type:   "int",
 				},
-				sdk.Field{
+				sdk.Trigger{
 					Name:   "Pressure",
 					Direct: false,
 					Type:   "int",
 				},
 			},
+			Actions: []string{},
 		},
-		sdk.Trigger{
-			Name: "motion",
-			Fields: []sdk.Field{
-				sdk.Field{
+		sdk.Device{
+			Name:           "motion",
+			DefaultTrigger: "",
+			DefaultAction:  "",
+			Triggers: []sdk.Trigger{
+				sdk.Trigger{
 					Name:          "Status",
 					Direct:        true,
 					Type:          "string",
 					Possibilities: []string{"motion"},
 				},
-				sdk.Field{
+				sdk.Trigger{
 					Name:   "NoMotion",
 					Direct: false,
 					Type:   "int",
 				},
 			},
 		},
-		sdk.Trigger{
-			Name: "sensormagnetaq2",
-			Fields: []sdk.Field{
-				sdk.Field{
+		sdk.Device{
+			Name:           "sensormagnetaq2",
+			DefaultTrigger: "",
+			DefaultAction:  "",
+			Triggers: []sdk.Trigger{
+				sdk.Trigger{
 					Name:          "Status",
 					Direct:        true,
 					Type:          "string",
@@ -100,46 +113,52 @@ var Config = sdk.Configuration{
 				},
 			},
 		},
-		sdk.Trigger{
-			Name: "sensormotionaq2",
-			Fields: []sdk.Field{
-				sdk.Field{
+		sdk.Device{
+			Name:           "sensormotionaq2",
+			DefaultTrigger: "",
+			DefaultAction:  "",
+			Triggers: []sdk.Trigger{
+				sdk.Trigger{
 					Name:          "Status",
 					Direct:        true,
 					Type:          "string",
 					Possibilities: []string{"motion"},
 				},
-				sdk.Field{
+				sdk.Trigger{
 					Name:   "Lux",
 					Direct: false,
 					Type:   "int",
 				},
-				sdk.Field{
+				sdk.Trigger{
 					Name:   "NoMotion",
 					Direct: false,
 					Type:   "int",
 				},
 			},
 		},
-		sdk.Trigger{
-			Name: "sensorcubeaqgl01",
-			Fields: []sdk.Field{
-				sdk.Field{
+		sdk.Device{
+			Name:           "sensorcubeaqgl01",
+			DefaultTrigger: "",
+			DefaultAction:  "",
+			Triggers: []sdk.Trigger{
+				sdk.Trigger{
 					Name:          "Status",
 					Direct:        true,
 					Type:          "string",
 					Possibilities: []string{"move", "tap_twice", "shake_air", "alert", "flip90", "flip180", "free_fall"},
 				},
-				sdk.Field{
+				sdk.Trigger{
 					Name:   "rotate",
 					Direct: true,
 					Type:   "string",
 				},
 			},
 		},
-		sdk.Trigger{
-			Name:   "vibration",
-			Fields: []sdk.Field{},
+		sdk.Device{
+			Name:           "vibration",
+			DefaultTrigger: "",
+			DefaultAction:  "",
+			Triggers:       []sdk.Trigger{},
 		},
 	},
 	Actions: []sdk.Action{},
@@ -147,7 +166,7 @@ var Config = sdk.Configuration{
 
 var conn *net.UDPConn
 var gateways []devices.Gateway
-var devs []sdk.Device
+var devs []sdk.DiscoveredDevice
 var addr *net.UDPAddr
 
 type xiaomi struct {
@@ -186,7 +205,7 @@ func OnStart(config []byte) {
 }
 
 // Discover return array of all found devices
-func Discover() []sdk.Device {
+func Discover() []sdk.DiscoveredDevice {
 	return devs
 }
 
@@ -250,7 +269,7 @@ func OnData() []sdk.Data {
 		if res.Model == "" {
 			break
 		}
-		devs = append(devs, sdk.Device{
+		devs = append(devs, sdk.DiscoveredDevice{
 			Name:         "",
 			PhysicalID:   res.SID,
 			PhysicalName: physicalName,
@@ -267,7 +286,7 @@ func OnData() []sdk.Data {
 		return nil
 	}
 
-	if res.Model != "" && sdk.FindTriggerFromName(Config.Triggers, physicalName).Name != "" {
+	if res.Model != "" && sdk.FindDevicesFromName(Config.Devices, physicalName).Name != "" {
 		data := []byte(res.Data.(string))
 		device := new(xiaomi)
 		err := json.Unmarshal(data, &device)
@@ -280,7 +299,7 @@ func OnData() []sdk.Data {
 			PhysicalName: physicalName,
 			PhysicalID:   res.SID,
 		}
-		for _, field := range sdk.FindTriggerFromName(Config.Triggers, physicalName).Fields {
+		for _, field := range sdk.FindDevicesFromName(Config.Devices, physicalName).Triggers {
 			newData.Values = append(newData.Values, sdk.Value{
 				Name:  field.Name,
 				Value: []byte(reflect.ValueOf(device).Elem().FieldByName(field.Name).String()),
@@ -311,7 +330,7 @@ func findGatewayFromSID(sid string) *devices.Gateway {
 	return nil
 }
 
-func findDeviceFromSID(sid string) *sdk.Device {
+func findDeviceFromSID(sid string) *sdk.DiscoveredDevice {
 	if len(devs) == 0 {
 		return nil
 	}
