@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net"
 	"reflect"
 	"strings"
@@ -168,6 +167,7 @@ var conn *net.UDPConn
 var gateways []devices.Gateway
 var devs []sdk.DiscoveredDevice
 var addr *net.UDPAddr
+var chanDatas chan sdk.Data
 
 type xiaomi struct {
 	SID            string   `json:"sid"`
@@ -192,16 +192,23 @@ type xiaomi struct {
 // OnStart start UDP server to get Xiaomi data
 func OnStart(config []byte) {
 	var err error
-	addr, err = net.ResolveUDPAddr("udp", ip+":"+port)
-	if err != nil {
-		log.Panic(err)
+
+	chanDatas = make(chan sdk.Data)
+
+	for conn == nil {
+		addr, err = net.ResolveUDPAddr("udp", ip+":"+port)
+		if err != nil {
+			continue
+		}
+		conn, err = net.ListenMulticastUDP("udp", nil, addr)
+		if err != nil {
+			continue
+		}
+		time.Sleep(500 * time.Millisecond)
 	}
 
-	conn, err = net.ListenMulticastUDP("udp", nil, addr)
-	if err != nil {
-		log.Panic(err)
-	}
 	fmt.Printf("Listening gateway events\n")
+	go readUDPMessage()
 }
 
 // Discover return array of all found devices
@@ -209,108 +216,111 @@ func Discover() []sdk.DiscoveredDevice {
 	return devs
 }
 
-// OnData get data from xiaomi gateway
+// OnData func
 func OnData() []sdk.Data {
-	var datas []sdk.Data
-	if conn == nil {
-		log.Panic("No connection")
-	}
+	toSend := <-chanDatas
 
+	return []sdk.Data{toSend}
+}
+
+// OnData get data from xiaomi gateway
+func readUDPMessage() {
 	buf := make([]byte, 1024)
 	var res Event
 	var err error
 	var n int
 
+	defer func() {
+		go readUDPMessage()
+	}()
+
 	for res.SID == "" {
 		n, _, err = conn.ReadFromUDP(buf)
 		if err != nil {
-			log.Panic("Can't read udp", err)
+			return
 		}
 
 		err = json.Unmarshal(buf[0:n], &res)
 		if err != nil {
-			log.Println(err)
-		}
-	}
-
-	var newData sdk.Data
-	physicalName := strings.Replace(strings.Replace(strings.ToLower(res.Model), ".", "", -1), "_", "", -1)
-
-	switch res.CMD {
-	case "get_id_list_ack":
-		var datas []string
-
-		if findGatewayFromSID(res.SID) != nil {
-			break
-		}
-		err := json.Unmarshal([]byte(res.Data.(string)), &datas)
-		if err != nil {
 			fmt.Println(err)
 		}
-		gateways = append(gateways, devices.Gateway{
-			SID:     res.SID,
-			Token:   res.Token,
-			Devices: datas,
-		})
+	}
 
-		go func() {
-			for _, data := range datas {
-				for findDeviceFromSID(data) == nil {
-					_, err = conn.WriteToUDP([]byte(`{"cmd": "read", "sid": "`+data+`"}`), addr)
-					if err != nil {
-						log.Println(err)
-					}
-					time.Sleep(500 * time.Millisecond)
-				}
+	go func(res Event) {
+		physicalName := strings.Replace(strings.Replace(strings.ToLower(res.Model), ".", "", -1), "_", "", -1)
+
+		switch res.CMD {
+		case "get_id_list_ack":
+			var datas []string
+
+			if findGatewayFromSID(res.SID) != nil {
+				break
 			}
-		}()
-		return nil
-	case "read_ack":
-		if res.Model == "" {
-			break
-		}
-		devs = append(devs, sdk.DiscoveredDevice{
-			Name:         "",
-			PhysicalID:   res.SID,
-			PhysicalName: physicalName,
-			Plugin:       Config.Name,
-		})
-		return nil
-	}
-
-	if res.Model == "gateway" && findGatewayFromSID(res.SID) == nil {
-		conn.WriteToUDP([]byte(`{"cmd": "get_id_list", "sid": "`+res.SID+`"}`), addr)
-		if err != nil {
-			log.Println(err)
-		}
-		return nil
-	}
-
-	if res.Model != "" && sdk.FindDevicesFromName(Config.Devices, physicalName).Name != "" {
-		data := []byte(res.Data.(string))
-		device := new(xiaomi)
-		err := json.Unmarshal(data, &device)
-		if err != nil {
-			log.Println(err)
-		}
-
-		newData = sdk.Data{
-			Plugin:       Config.Name,
-			PhysicalName: physicalName,
-			PhysicalID:   res.SID,
-		}
-		for _, field := range sdk.FindDevicesFromName(Config.Devices, physicalName).Triggers {
-			newData.Values = append(newData.Values, sdk.Value{
-				Name:  field.Name,
-				Value: []byte(reflect.ValueOf(device).Elem().FieldByName(field.Name).String()),
-				Type:  field.Type,
+			err := json.Unmarshal([]byte(res.Data.(string)), &datas)
+			if err != nil {
+				fmt.Println(err)
+			}
+			gateways = append(gateways, devices.Gateway{
+				SID:     res.SID,
+				Token:   res.Token,
+				Devices: datas,
 			})
-		}
-		datas = append(datas, newData)
-		return datas
-	}
 
-	return nil
+			go func() {
+				for _, data := range datas {
+					for findDeviceFromSID(data) == nil {
+						_, err = conn.WriteToUDP([]byte(`{"cmd": "read", "sid": "`+data+`"}`), addr)
+						time.Sleep(500 * time.Millisecond)
+					}
+				}
+			}()
+			return
+		case "read_ack":
+			if res.Model == "" {
+				break
+			}
+			devs = append(devs, sdk.DiscoveredDevice{
+				Name:         "",
+				PhysicalID:   res.SID,
+				PhysicalName: physicalName,
+				Plugin:       Config.Name,
+			})
+			return
+		}
+
+		if res.Model == "gateway" && findGatewayFromSID(res.SID) == nil {
+			conn.WriteToUDP([]byte(`{"cmd": "get_id_list", "sid": "`+res.SID+`"}`), addr)
+			if err != nil {
+				fmt.Println(err)
+			}
+			return
+		}
+
+		if res.Model != "" && sdk.FindDevicesFromName(Config.Devices, physicalName).Name != "" {
+			data := []byte(res.Data.(string))
+			device := new(xiaomi)
+			err := json.Unmarshal(data, &device)
+			if err != nil {
+				fmt.Println(err)
+			}
+
+			newData := sdk.Data{
+				Plugin:       Config.Name,
+				PhysicalName: physicalName,
+				PhysicalID:   res.SID,
+			}
+			for _, field := range sdk.FindDevicesFromName(Config.Devices, physicalName).Triggers {
+				newData.Values = append(newData.Values, sdk.Value{
+					Name:  field.Name,
+					Value: []byte(reflect.ValueOf(device).Elem().FieldByName(field.Name).String()),
+					Type:  field.Type,
+				})
+			}
+			chanDatas <- newData
+
+			return
+		}
+	}(res)
 }
 
 // OnStop close connection
