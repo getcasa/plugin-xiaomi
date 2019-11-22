@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -25,6 +26,7 @@ var Config = sdk.Configuration{
 	Version:     "1.0.0",
 	Author:      "ItsJimi",
 	Description: "Control xiaomi ecosystem",
+	Discover:    true,
 	Devices: []sdk.Device{
 		sdk.Device{
 			Name:           "switch",
@@ -310,9 +312,18 @@ func readUDPMessage() {
 				PhysicalID:   res.SID,
 			}
 			for _, field := range sdk.FindDevicesFromName(Config.Devices, physicalName).Triggers {
+				value := reflect.ValueOf(device).Elem().FieldByName(field.Name).String()
+				if value == "" {
+					continue
+				}
+				if field.Name == "Temperature" || field.Name == "Humidity" || field.Name == "Pressure" {
+					intVal, _ := strconv.ParseFloat(reflect.ValueOf(device).Elem().FieldByName(field.Name).String(), 64)
+					value = fmt.Sprintf("%f", intVal/100)
+				}
+
 				newData.Values = append(newData.Values, sdk.Value{
 					Name:  field.Name,
-					Value: []byte(reflect.ValueOf(device).Elem().FieldByName(field.Name).String()),
+					Value: []byte(value),
 					Type:  field.Type,
 				})
 			}
