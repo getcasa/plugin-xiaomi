@@ -44,7 +44,7 @@ var Config = sdk.Configuration{
 		},
 		sdk.Device{
 			Name:           "sensorht",
-			DefaultTrigger: "",
+			DefaultTrigger: "Temperature",
 			DefaultAction:  "",
 			Triggers: []sdk.Trigger{
 				sdk.Trigger{
@@ -62,7 +62,7 @@ var Config = sdk.Configuration{
 		},
 		sdk.Device{
 			Name:           "weatherv1",
-			DefaultTrigger: "",
+			DefaultTrigger: "Temperature",
 			DefaultAction:  "",
 			Triggers: []sdk.Trigger{
 				sdk.Trigger{
@@ -149,7 +149,7 @@ var Config = sdk.Configuration{
 					Possibilities: []string{"move", "tap_twice", "shake_air", "alert", "flip90", "flip180", "free_fall"},
 				},
 				sdk.Trigger{
-					Name:   "rotate",
+					Name:   "Rotate",
 					Direct: true,
 					Type:   "string",
 				},
@@ -159,7 +159,29 @@ var Config = sdk.Configuration{
 			Name:           "vibration",
 			DefaultTrigger: "",
 			DefaultAction:  "",
-			Triggers:       []sdk.Trigger{},
+			Triggers: []sdk.Trigger{
+				sdk.Trigger{
+					Name:          "Status",
+					Direct:        true,
+					Type:          "string",
+					Possibilities: []string{"vibrate", "tilt", "free_fall"},
+				},
+				sdk.Trigger{
+					Name:   "FinalTiltAngle",
+					Direct: true,
+					Type:   "int",
+				},
+				sdk.Trigger{
+					Name:   "Coordination",
+					Direct: true,
+					Type:   "string",
+				},
+				sdk.Trigger{
+					Name:   "BedActivity",
+					Direct: true,
+					Type:   "int",
+				},
+			},
 		},
 	},
 	Actions: []sdk.Action{},
@@ -177,12 +199,12 @@ type xiaomi struct {
 	IP             string   `json:"ip"`
 	Token          string   `json:"token"`
 	Devices        []string `json:"data"`
-	RGB            int      `json:"rgb"`
-	Illumination   int      `json:"illumination"`
+	RGB            string   `json:"rgb"`
+	Illumination   string   `json:"illumination"`
 	Rotate         string   `json:"rotate"`
 	NoMotion       string   `json:"no_motion"`
 	Lux            string   `json:"lux"`
-	Voltage        int      `json:"voltage"`
+	Voltage        string   `json:"voltage"`
 	BedActivity    string   `json:"bed_activity"`
 	Coordination   string   `json:"coordination"`
 	FinalTiltAngle string   `json:"final_tilt_angle"`
@@ -312,18 +334,19 @@ func readUDPMessage() {
 				PhysicalID:   res.SID,
 			}
 			for _, field := range sdk.FindDevicesFromName(Config.Devices, physicalName).Triggers {
-				value := reflect.ValueOf(device).Elem().FieldByName(field.Name).String()
-				if value == "" {
+				var valueString string
+				value := reflect.ValueOf(device).Elem().FieldByName(field.Name)
+				if value.String() == "" || !value.IsValid() {
 					continue
 				}
+				valueString = value.String()
 				if field.Name == "Temperature" || field.Name == "Humidity" || field.Name == "Pressure" {
-					intVal, _ := strconv.ParseFloat(reflect.ValueOf(device).Elem().FieldByName(field.Name).String(), 64)
-					value = fmt.Sprintf("%f", intVal/100)
+					intVal, _ := strconv.ParseFloat(value.String(), 64)
+					valueString = fmt.Sprintf("%f", intVal/100)
 				}
-
 				newData.Values = append(newData.Values, sdk.Value{
 					Name:  field.Name,
-					Value: []byte(value),
+					Value: []byte(valueString),
 					Type:  field.Type,
 				})
 			}
